@@ -1,0 +1,10 @@
+{
+    "db_name": "news_science",
+    "countries": "cn,us",
+    "language": "zh",
+    "limit": 100,
+    "sort": "published_desc",
+    "categories": "science",
+    "sources": "",
+    "offset": 0
+}
