@@ -1,0 +1,10 @@
+{
+    "db_name": "news_business",
+    "countries": "cn,us",
+    "language": "zh",
+    "limit": 100,
+    "sort": "popularity",
+    "categories": "business",
+    "sources": "-SeekingAlpha",
+    "offset": 0
+}
