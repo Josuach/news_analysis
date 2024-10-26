@@ -4,6 +4,7 @@ import http.client, urllib.parse
 import json
 import os
 import time
+from datetime import datetime
 
 # 分别获取business、science、technology的数据存入不同数据库中，提供不同的配置(access_key和date在程序中给出)
 # 注意到美国和巴黎有6小时时差，因此考虑晚上跑一次，早上跑一次，同时做数据去重（按照标题）
@@ -21,6 +22,17 @@ def ensure_period(text):
         return text + '.'
     return text
 
+def get_date_int(datetime_str):
+    # # 要解析的日期时间字符串
+    # date_str = "2024-10-24T02:13:41+00:00"
+
+    # 解析日期时间字符串
+    parsed_date = datetime.fromisoformat(datetime_str)
+
+    # 格式化为 YYYYMMDD 的整数
+    date_int = int(parsed_date.strftime("%Y%m%d"))
+    return date_int
+
 def create_table_if_not_exist(conn, cursor, db_name):
     # 创建 news 表，添加翻译字段
     cursor.execute(f'''
@@ -36,8 +48,13 @@ def create_table_if_not_exist(conn, cursor, db_name):
         country TEXT,
         url TEXT,
         image TEXT,
-        language TEXT
+        language TEXT,
+        date_int INTEGER
     )
+    ''')
+
+    cursor.execute(f'''
+    CREATE INDEX IF NOT EXISTS index_{db_name}_date_int ON {db_name}(date_int);
     ''')
 
     # 提交创建表操作
@@ -74,17 +91,21 @@ def store_data(conn, cursor, db_name, data):
         title = ensure_period(news_item.get('title', ''))
         description = ensure_period(news_item.get('description', ''))
 
-        # 翻译 title 和 description 为中文
-        translated_title = translator.translate(title, src='en', dest='zh-cn').text
-        translated_description = translator.translate(description, src='en', dest='zh-cn').text
+        translated_title = ""
+        translated_description = ""
+        if title is not None:
+            translated_title = translator.translate(title, src='en', dest='zh-cn').text
+        if translated_description is not None:
+            translated_description = translator.translate(description, src='en', dest='zh-cn').text
 
         # 直接保存 published_at 字段的完整字符串，包括时间和时区
         published_at_str = news_item.get('published_at')
 
         # 插入每个新闻项到 news 表中，包括翻译后的标题和描述
         cursor.execute(f'''
-        INSERT OR IGNORE INTO {db_name} (translated_title, translated_description, author, title, description, url, source, image, language, country, published_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT OR IGNORE INTO {db_name} (translated_title, translated_description, 
+        author, title, description, url, source, image, language, country, published_at, date_int)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)
         ''', (
             translated_title,  # 翻译后的标题
             translated_description,  # 翻译后的描述
@@ -96,9 +117,10 @@ def store_data(conn, cursor, db_name, data):
             news_item.get('image'),  # None 可以直接插入
             news_item.get('language'),
             news_item.get('country'),
-            published_at_str  # 保留完整的日期、时间和时区字符串
+            published_at_str,  # 保留完整的日期、时间和时区字符串
+            get_date_int(published_at_str)
         ))
-        print("processed")
+        # print("processed")
 
     # 提交所有插入操作
     conn.commit()
@@ -113,8 +135,8 @@ def fetch_data_and_store(config_file_path):
     conn = sqlite3.connect(f"/home/data/win11_data/sqlite/{config['db_name']}.db")
     cursor = conn.cursor()
 
-    # cursor.execute(f"drop table IF EXISTS {config['db_name']}")
-    # conn.commit()
+    cursor.execute(f"drop table IF EXISTS {config['db_name']}")
+    conn.commit()
 
     create_table_if_not_exist(conn, cursor, config['db_name'])
 
